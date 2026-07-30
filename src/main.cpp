@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <cstdint>
 #include <iostream>
+#include <vector>
 
 struct waveHeader {
     char chunkDescriptor[4];
@@ -22,28 +23,25 @@ struct waveHeader {
 };
 
 int main() {
-    std::ifstream file("../samples/synth.wav", std::ios::binary);
+    std::ifstream file("./samples/synth.wav", std::ios::binary);
     if (!file.is_open())
         throw std::invalid_argument("File not found.");
 
     waveHeader synth;
     file.read(reinterpret_cast<char*>(&synth), sizeof(waveHeader));
 
-    std::cout << "Chunk Size: " << synth.chunkSize << std::endl <<
-                 "Audio Format: " << synth.audioFormat << std::endl <<
-                 "Format: " << synth.format << std::endl <<
-                 "numChannels: " << synth.numChannels << std::endl << 
-                 "subchunk1Size: " << synth.subchunk1Size << std::endl <<
-                 "subchunk2Size: " << synth.subchunk2Size << std::endl <<
-                 "sampleRate: " << synth.sampleRate << std::endl <<
-                 "bitsPerSample: " << synth.bitsPerSample << std::endl;
-
-    int16_t* data = new int16_t[synth.subchunk2Size / sizeof(int16_t)];
-    file.read(reinterpret_cast<char*>(data), synth.subchunk2Size);
-    for (uint32_t i = 0; i < synth.subchunk2Size / (int) sizeof(int16_t); i++) {
-        std::cout << data[i] << std::endl;
+    std::vector<std::vector<std::vector<int16_t>>> frames;
+    for (uint32_t i = 0; i < synth.subchunk2Size / synth.blockAlign; ++i) {
+        std::vector<std::vector<int16_t>> frame;
+        for (uint16_t j = 0; j < synth.numChannels; ++j) {
+            std::vector<int16_t> channel;
+            int16_t sample;
+            file.read(reinterpret_cast<char*>(&sample), sizeof(int16_t));
+            channel.push_back(sample);
+            frame.push_back(channel);
+        }
+        frames.push_back(frame);
     }
-    delete[] data;
-    data = nullptr;
+
     return 0;
 }
