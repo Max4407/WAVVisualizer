@@ -3,6 +3,10 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include <atomic>
+#include <string>
+
+#include "./audio.h"
 
 struct waveHeader {
     char chunkDescriptor[4];
@@ -23,10 +27,11 @@ struct waveHeader {
 };
 
 int main() {
-    std::ifstream file("./samples/synth.wav", std::ios::binary);
+    std::string path = "../samples/synth.wav";
+    std::ifstream file(path, std::ios::binary);
     if (!file.is_open())
         throw std::invalid_argument("File not found.");
-
+    
     waveHeader synth;
     file.read(reinterpret_cast<char*>(&synth), sizeof(waveHeader));
 
@@ -43,5 +48,8 @@ int main() {
         frames.push_back(frame);
     }
 
+    std::atomic<int> frameCounter(0);
+
+    startAudio(&frameCounter, path);
     return 0;
 }
