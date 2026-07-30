@@ -22,7 +22,7 @@ struct waveHeader {
 };
 
 int main() {
-    std::ifstream file("./samples/synth.wav", std::ios::binary);
+    std::ifstream file("../samples/synth.wav", std::ios::binary);
     if (!file.is_open())
         throw std::invalid_argument("File not found.");
 
