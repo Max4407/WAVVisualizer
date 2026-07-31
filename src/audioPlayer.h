@@ -12,7 +12,11 @@ private:
     ma_decoder decoder;
     ma_device_config deviceConfig;
     ma_device device;
+    bool* atEnd;
 public:
-    audioPlayer(std::string path_, std::atomic<int>* frameCounter_);
+    audioPlayer(std::string path_, std::atomic<int>* frameCounter_, bool* atEnd_);
     int startAudio();
+    int stopAudio();
+    int restart();
+    ~audioPlayer();
 };

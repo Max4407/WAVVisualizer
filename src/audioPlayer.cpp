@@ -3,7 +3,8 @@
 struct context {
     ma_decoder* decoder;
     std::atomic<int>* frameCounter;
-    context(ma_decoder* decoder, std::atomic<int>* frameCounter) : decoder(decoder), frameCounter(frameCounter) {}
+    bool* atEnd;
+    context(ma_decoder* decoder, std::atomic<int>* frameCounter, bool* atEnd) : decoder(decoder), frameCounter(frameCounter), atEnd(atEnd) {}
 };
 
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
@@ -13,13 +14,16 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
         return;
 
     c -> frameCounter -> fetch_add(frameCount);
-    std::cout << "Frames processed: " << c -> frameCounter -> load() << std::endl;
-    ma_decoder_read_pcm_frames(pDecoder, pOutput, frameCount, NULL);
+    ma_uint64 framesRead;
 
+    ma_result result = ma_decoder_read_pcm_frames(pDecoder, pOutput, frameCount, &framesRead);
+    if (framesRead < frameCount) {
+        *(c -> atEnd) = true;
+    }
     (void)pInput;
 }
 
-audioPlayer::audioPlayer(std::string path_, std::atomic<int>* frameCounter_) : path(path_), frameCounter(frameCounter_) {
+audioPlayer::audioPlayer(std::string path_, std::atomic<int>* frameCounter_, bool* atEnd_) : path(path_), frameCounter(frameCounter_), atEnd(atEnd_) {
     ma_result result;
 
     result = ma_decoder_init_file(path.c_str(), NULL, &decoder);
@@ -33,7 +37,7 @@ audioPlayer::audioPlayer(std::string path_, std::atomic<int>* frameCounter_) : p
     deviceConfig.playback.channels = decoder.outputChannels;
     deviceConfig.sampleRate        = decoder.outputSampleRate;
     deviceConfig.dataCallback      = data_callback;
-    deviceConfig.pUserData         = new context(&decoder, frameCounter);
+    deviceConfig.pUserData         = new context(&decoder, frameCounter, atEnd);
 
     if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
         printf("Failed to open playback device.\n");
@@ -49,12 +53,27 @@ int audioPlayer::startAudio() {
         ma_decoder_uninit(&decoder);
         return -1;
     }
+    return 0;
+}
 
-    printf("Press Enter to quit...");
-    getchar();
+int audioPlayer::stopAudio() {
+    if (ma_device_stop(&device) != MA_SUCCESS) {
+        printf("Failed to stop playback device.\n");
+        ma_device_uninit(&device);
+        ma_decoder_uninit(&decoder);
+        return -1;
+    }
+    return 0;
+}
 
+int audioPlayer::restart() {
+    stopAudio();
+    ma_decoder_seek_to_pcm_frame(&decoder, 0);
+    frameCounter -> store(0);
+    return 0;
+}
+
+audioPlayer::~audioPlayer() {
     ma_device_uninit(&device);
     ma_decoder_uninit(&decoder);
-
-    return 0;
 }
