@@ -6,7 +6,7 @@
 #include <atomic>
 #include <string>
 
-#include "./audio.h"
+#include "./audioPlayer.h"
 
 struct waveHeader {
     char chunkDescriptor[4];
@@ -50,6 +50,7 @@ int main() {
 
     std::atomic<int> frameCounter(0);
 
-    startAudio(&frameCounter, path);
+    audioPlayer player(path, &frameCounter);
+    player.startAudio();
     return 0;
 }
