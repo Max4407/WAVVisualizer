@@ -6,6 +6,7 @@
 #include <atomic>
 #include <string>
 
+#include "SFML/Graphics.hpp"
 #include "./audioPlayer.h"
 
 struct waveHeader {
@@ -49,8 +50,20 @@ int main() {
     }
 
     std::atomic<int> frameCounter(0);
-
     audioPlayer player(path, &frameCounter);
-    player.startAudio();
+    sf::RenderWindow window(sf::VideoMode({1000,1000}), "Minesweeper");
+
+    while (window.isOpen()) {
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<sf::Event::Closed>())
+                window.close();
+            if (event->is<sf::Event::KeyPressed>()) {
+                player.startAudio();
+            }
+        }   
+        window.clear();
+        window.display();
+    }
+
     return 0;
 }
