@@ -28,7 +28,7 @@ struct waveHeader {
 };
 
 int main() {
-    std::string path = "../samples/synth.wav";
+    std::string path = "../samples/C418 - Minecraft - Volume Alpha - 06 Moog City.wav";
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open())
         throw std::invalid_argument("File not found.");
@@ -51,13 +51,29 @@ int main() {
     bool atEnd = false; //has to be external because you cant stop in data_callback
     audioPlayer player(path, &frameCounter, &atEnd);
 
-    sf::RenderWindow window(sf::VideoMode({1500,750}), "visualizer");
+    sf::RenderWindow window(sf::VideoMode({1250,750}), "visualizer");
     
     sf::VertexArray oscilloscope(sf::PrimitiveType::LineStrip, 101);
     for (int i = 0; i < 101; ++i) {
         oscilloscope[i].position = sf::Vector2f((i * 5) + 125, 375);
         oscilloscope[i].color = sf::Color::Green;
     }
+
+    sf::RectangleShape outline;
+    outline.setSize(sf::Vector2f(500.f, 500.f));
+    outline.setFillColor(sf::Color::Transparent);
+    outline.setOutlineColor(sf::Color(70,70,70));    
+    outline.setOutlineThickness(10);   
+    outline.setPosition(sf::Vector2f(125, 125));
+
+    sf::Texture playButtontexture;
+    playButtontexture.loadFromFile("../assets/play_button.png");
+    sf::Sprite playButton(playButtontexture);
+    playButton.setPosition(sf::Vector2f(913, 450));
+    playButton.setScale({
+        50 / playButton.getLocalBounds().size.x,
+        50 / playButton.getLocalBounds().size.y
+    });
 
     bool isPlaying = false;
     while (window.isOpen()) {
@@ -79,6 +95,21 @@ int main() {
 
                 }
             }
+            if (event->is<sf::Event::MouseButtonPressed>()) {
+                auto mouseCoord = window.mapPixelToCoords(
+                    sf::Mouse::getPosition(window)
+                );
+                
+                if (playButton.getGlobalBounds().contains(mouseCoord)) {
+                    if (isPlaying) {
+                        player.stopAudio();
+                        isPlaying = false;
+                    } else {
+                        player.startAudio();
+                        isPlaying = true;
+                    }
+                }
+            }
         }   
         if (isPlaying) {
             int currentFrame = frameCounter.load();
@@ -91,10 +122,14 @@ int main() {
         }
         if (atEnd) {
             player.restart();
+            for (int i = 0; i < 101; ++i) 
+                oscilloscope[i].position.y = 375;
             isPlaying = false;
             atEnd = false;
         }
         window.clear();
+        window.draw(playButton);
+        window.draw(outline);
         window.draw(oscilloscope);
         window.display();
     }
