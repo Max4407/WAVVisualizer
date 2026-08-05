@@ -33,13 +33,13 @@ int main() {
     if (!file.is_open())
         throw std::invalid_argument("File not found.");
     
-    waveHeader synth;
-    file.read(reinterpret_cast<char*>(&synth), sizeof(waveHeader));
+    waveHeader wave;
+    file.read(reinterpret_cast<char*>(&wave), sizeof(waveHeader));
 
     std::vector<std::vector<int16_t>> frames;
-    for (uint32_t i = 0; i < synth.subchunk2Size / synth.blockAlign; ++i) {
+    for (uint32_t i = 0; i < wave.subchunk2Size / wave.blockAlign; ++i) {
         std::vector<int16_t> frame;
-        for (uint16_t j = 0; j < synth.numChannels; ++j) {
+        for (uint16_t j = 0; j < wave.numChannels; ++j) {
             int16_t sample;
             file.read(reinterpret_cast<char*>(&sample), sizeof(int16_t));
             frame.push_back(sample);
@@ -66,10 +66,33 @@ int main() {
     outline.setOutlineThickness(10);   
     outline.setPosition(sf::Vector2f(125, 125));
 
+    sf::RectangleShape progressBarBackground;
+    progressBarBackground.setSize(sf::Vector2f(375.f, 8.f));
+    progressBarBackground.setFillColor(sf::Color(70,70,70));
+    progressBarBackground.setPosition(sf::Vector2f(750, 426));
+    progressBarBackground.setOutlineColor(sf::Color(40, 40, 40));
+    progressBarBackground.setOutlineThickness(1);
+
+    sf::RectangleShape progressBar;
+    progressBar.setSize(sf::Vector2f(0.f, 8.f));
+    progressBar.setFillColor(sf::Color::Green);
+    progressBar.setPosition(sf::Vector2f(750, 426));
+    progressBar.setOutlineColor(sf::Color(40, 40, 40));
+    progressBar.setOutlineThickness(1);
+
+    sf::RectangleShape progressBarButton;
+    progressBarButton.setSize(sf::Vector2f(12.f, 12.f));
+    progressBarButton.setFillColor(sf::Color(100, 100, 100));
+    progressBarButton.setPosition(sf::Vector2f(750, 424));
+    progressBarButton.setOutlineColor(sf::Color(40, 40, 40));
+    progressBarButton.setOutlineThickness(1);
+
     sf::Texture playButtontexture;
-    playButtontexture.loadFromFile("../assets/play_button.png");
+    if (!playButtontexture.loadFromFile("../assets/play_button.png")) {
+        throw std::runtime_error("Failed to load play button texture");
+    }
     sf::Sprite playButton(playButtontexture);
-    playButton.setPosition(sf::Vector2f(913, 450));
+    playButton.setPosition(sf::Vector2f(912, 450));
     playButton.setScale({
         50 / playButton.getLocalBounds().size.x,
         50 / playButton.getLocalBounds().size.y
@@ -109,6 +132,7 @@ int main() {
                         isPlaying = true;
                     }
                 }
+
             }
         }   
         if (isPlaying) {
@@ -119,6 +143,10 @@ int main() {
                     oscilloscope[i].position.y = 375 - (sample / 32768.0f) * 250;
                 }
             }
+
+            float progress = static_cast<float>(currentFrame) / frames.size();
+            progressBar.setSize(sf::Vector2f(progress * 375, 8));
+            progressBarButton.setPosition(sf::Vector2f(750 + progress * 375, 424));
         }
         if (atEnd) {
             player.restart();
@@ -130,6 +158,9 @@ int main() {
         window.clear();
         window.draw(playButton);
         window.draw(outline);
+        window.draw(progressBarBackground);
+        window.draw(progressBar);
+        window.draw(progressBarButton);
         window.draw(oscilloscope);
         window.display();
     }
