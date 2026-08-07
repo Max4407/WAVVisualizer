@@ -77,3 +77,8 @@ audioPlayer::~audioPlayer() {
     ma_device_uninit(&device);
     ma_decoder_uninit(&decoder);
 }
+
+int audioPlayer::seekToFrame(int frame) {
+    ma_decoder_seek_to_pcm_frame(&decoder, frame);
+    return 0;
+}

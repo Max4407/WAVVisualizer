@@ -18,5 +18,6 @@ public:
     int startAudio();
     int stopAudio();
     int restart();
+    int seekToFrame(int frame);
     ~audioPlayer();
 };

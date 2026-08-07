@@ -32,20 +32,28 @@ int main() {
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open())
         throw std::invalid_argument("File not found.");
+
+    std::string name;
+    for (int i = path.size() - 1; i >= 0; --i) {
+        if (path[i] == '/' || path[i] == '\\') {
+            name = path.substr(i + 1);
+            break;
+        }
+    }
+    for (int i = 0; i < name.size(); ++i) {
+        if (name[i] == '.') {
+            name = name.substr(0, i);
+            break;
+        }
+    }
     
     waveHeader wave;
     file.read(reinterpret_cast<char*>(&wave), sizeof(waveHeader));
 
-    std::vector<std::vector<int16_t>> frames;
-    for (uint32_t i = 0; i < wave.subchunk2Size / wave.blockAlign; ++i) {
-        std::vector<int16_t> frame;
-        for (uint16_t j = 0; j < wave.numChannels; ++j) {
-            int16_t sample;
-            file.read(reinterpret_cast<char*>(&sample), sizeof(int16_t));
-            frame.push_back(sample);
-        }
-        frames.push_back(frame);
-    }
+    size_t totalSamples = wave.subchunk2Size / sizeof(int16_t);
+    std::vector<int16_t> samples(totalSamples);
+    file.read(reinterpret_cast<char*>(samples.data()), wave.subchunk2Size);
+    int frames = totalSamples / wave.numChannels;
 
     std::atomic<int> frameCounter(0);
     bool atEnd = false; //has to be external because you cant stop in data_callback
@@ -83,9 +91,10 @@ int main() {
     sf::RectangleShape progressBarButton;
     progressBarButton.setSize(sf::Vector2f(12.f, 12.f));
     progressBarButton.setFillColor(sf::Color(100, 100, 100));
-    progressBarButton.setPosition(sf::Vector2f(750, 424));
+    progressBarButton.setPosition(sf::Vector2f(744, 424));
     progressBarButton.setOutlineColor(sf::Color(40, 40, 40));
     progressBarButton.setOutlineThickness(1);
+    bool scrubbing = false;
 
     sf::Texture playButtontexture;
     if (!playButtontexture.loadFromFile("../assets/play_button.png")) {
@@ -98,8 +107,19 @@ int main() {
         50 / playButton.getLocalBounds().size.y
     });
 
+    sf::Font font("../assets/VCR_OSD_MONO_1.001.ttf");
+    sf::Text titleText(font, name, 18);
+    titleText.setFillColor(sf::Color::White);
+    sf::FloatRect bounds = titleText.getLocalBounds();
+    titleText.setOrigin(sf::Vector2f(bounds.position.x + bounds.size.x / 2.0f, bounds.position.y + bounds.size.y / 2.0f));
+    titleText.setPosition(sf::Vector2f(938, 350));
+
     bool isPlaying = false;
     while (window.isOpen()) {
+        auto mouseCoord = window.mapPixelToCoords(
+                sf::Mouse::getPosition(window)
+            );
+
         while (const std::optional event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 player.stopAudio(); 
@@ -119,9 +139,6 @@ int main() {
                 }
             }
             if (event->is<sf::Event::MouseButtonPressed>()) {
-                auto mouseCoord = window.mapPixelToCoords(
-                    sf::Mouse::getPosition(window)
-                );
                 
                 if (playButton.getGlobalBounds().contains(mouseCoord)) {
                     if (isPlaying) {
@@ -133,20 +150,58 @@ int main() {
                     }
                 }
 
-            }
-        }   
-        if (isPlaying) {
-            int currentFrame = frameCounter.load();
-            if (currentFrame < frames.size() - 101) {
-                for (int i = 0; i < 101; ++i) {
-                    int16_t sample = frames[currentFrame + i][0];
-                    oscilloscope[i].position.y = 375 - (sample / 32768.0f) * 250;
+                if (progressBarButton.getGlobalBounds().contains(mouseCoord)) {
+                    scrubbing = true;
+                } else if (progressBarBackground.getGlobalBounds().contains(mouseCoord)) {
+                    float progress = (mouseCoord.x - 750) / 375;
+                    if (progress < 0) progress = 0;
+                    if (progress > 1) progress = 1;
+                    int newFrame = static_cast<int>(progress * frames);
+                    progressBar.setSize(sf::Vector2f(progress * 375, 8));
+                    progressBarButton.setPosition(sf::Vector2f(744 + progress * 375, 424));
+                    frameCounter.store(newFrame);
+                    player.seekToFrame(newFrame);
                 }
             }
 
-            float progress = static_cast<float>(currentFrame) / frames.size();
-            progressBar.setSize(sf::Vector2f(progress * 375, 8));
-            progressBarButton.setPosition(sf::Vector2f(750 + progress * 375, 424));
+            if (event->is<sf::Event::MouseButtonReleased>()) {
+                if (scrubbing) {
+                    scrubbing = false;
+                    float progress = (mouseCoord.x - 750) / 375;
+                    if (progress < 0) progress = 0;
+                    if (progress > 1) progress = 1;
+                    progressBarButton.setPosition(sf::Vector2f(744 + progress * 375, 424));
+                    progressBar.setSize(sf::Vector2f(progress * 375, 8));
+                    int newFrame = static_cast<int>(progress * frames);
+                    frameCounter.store(newFrame);
+                    player.seekToFrame(newFrame);
+                }
+            }
+
+            if (event->is<sf::Event::MouseMoved>()) {
+                if (scrubbing) {
+                    float progress = (mouseCoord.x - 750) / 375;
+                    if (progress < 0) progress = 0;
+                    if (progress > 1) progress = 1;
+                    progressBarButton.setPosition(sf::Vector2f(744 + progress * 375, 424));
+                    progressBar.setSize(sf::Vector2f(progress * 375, 8));
+                }
+            }
+        }   
+
+        if (isPlaying) {
+            int currentFrame = frameCounter.load();
+            if (currentFrame < frames - 101) {
+                for (int i = 0; i < 101; ++i) {
+                    int16_t sample = samples[currentFrame + i * wave.numChannels];
+                    oscilloscope[i].position.y = 375 - (sample / 32768.0f) * 250;
+                }
+            }
+            if (!scrubbing) {
+                float progress = static_cast<float>(currentFrame) / (frames);
+                progressBar.setSize(sf::Vector2f(progress * 375, 8));
+                progressBarButton.setPosition(sf::Vector2f(744 + progress * 375, 424));
+            }
         }
         if (atEnd) {
             player.restart();
@@ -161,6 +216,7 @@ int main() {
         window.draw(progressBarBackground);
         window.draw(progressBar);
         window.draw(progressBarButton);
+        window.draw(titleText);
         window.draw(oscilloscope);
         window.display();
     }
